@@ -66,6 +66,7 @@ private:
     InstallCallback installCallback_;
 
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK ButtonSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     void CreateControls();

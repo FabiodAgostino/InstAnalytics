@@ -91,6 +91,21 @@ void PerformInstallation()
                 g_uiManager->SetError(errorMsg);
                 return;
             }
+
+            // Verify .NET installation and fix PATH if needed
+            g_uiManager->UpdateProgress(55, L"Verifica installazione .NET 10...");
+            Sleep(500);
+
+            bool pathFixed = DotNetChecker::VerifyAndFixDotNetPath();
+            if (!pathFixed) {
+                g_uiManager->SetError(L"Impossibile configurare il PATH per .NET 10");
+                delete g_installer;
+                g_installer = nullptr;
+                return;
+            }
+
+            g_uiManager->UpdateProgress(60, L".NET 10 configurato correttamente");
+            Sleep(300);
         } else {
             g_uiManager->UpdateProgress(30, L".NET 10 già installato");
             Sleep(500);
@@ -98,7 +113,7 @@ void PerformInstallation()
 
         // Step 4: Download InstAnalytics
         g_uiManager->SetState(InstallState::DownloadingApp);
-        g_uiManager->UpdateProgress(60, L"Download InstAnalytics...");
+        g_uiManager->UpdateProgress(65, L"Download InstAnalytics...");
 
         std::wstring appZipPath = tempPath + L"InstAnalytics.zip";
 
@@ -109,8 +124,8 @@ void PerformInstallation()
             appZipPath,
             [](int progress, const std::wstring& status) {
                 if (g_uiManager) {
-                    // Map download progress to 60-80% range
-                    int mappedProgress = 60 + (progress * 20 / 100);
+                    // Map download progress to 65-80% range
+                    int mappedProgress = 65 + (progress * 15 / 100);
                     g_uiManager->UpdateProgress(mappedProgress, status);
                 }
             }
@@ -139,8 +154,8 @@ void PerformInstallation()
             installPath,
             [](int progress, const std::wstring& status) {
                 if (g_uiManager) {
-                    // Map extraction progress to 80-95% range
-                    int mappedProgress = 80 + (progress * 15 / 100);
+                    // Map extraction progress to 80-93% range
+                    int mappedProgress = 80 + (progress * 13 / 100);
                     g_uiManager->UpdateProgress(mappedProgress, status);
                 }
             }
@@ -157,7 +172,7 @@ void PerformInstallation()
         }
 
         // Step 6: Create shortcuts
-        g_uiManager->UpdateProgress(95, L"Creazione collegamenti...");
+        g_uiManager->UpdateProgress(94, L"Creazione collegamenti...");
         g_installer->CreateShortcuts(installPath);
 
         delete g_installer;

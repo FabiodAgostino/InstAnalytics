@@ -16,10 +16,13 @@ public:
     static bool IsDotNet10Installed();
     static Architecture GetSystemArchitecture();
     static std::wstring GetDotNetDownloadUrl();
+    static bool VerifyAndFixDotNetPath();
 
 private:
     static bool CheckRegistryForDotNet();
     static bool CheckCommandLineForDotNet();
+    static bool AddDotNetToPath();
+    static std::wstring FindDotNetInstallPath();
 };
 
 } // namespace InstAnalyticsInstaller

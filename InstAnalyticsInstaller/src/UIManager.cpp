@@ -3,11 +3,18 @@
 #include <commctrl.h>
 #include <shlobj.h>
 #include <gdiplus.h>
+#include <windowsx.h>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
 
 namespace InstAnalyticsInstaller {
+
+// Helper function for logging (disabled)
+void LogDebug(const std::wstring& message) {
+    // Logging disabled
+    (void)message; // Suppress unused parameter warning
+}
 
 constexpr int ID_INSTALL_BUTTON = 1001;
 constexpr int ID_BROWSE_BUTTON = 1002;
@@ -194,18 +201,17 @@ void UIManager::CreateControls()
     );
     currentY += 50;
 
-    // Install and Cancel buttons (side by side)
+    // Cancel and Install buttons (side by side, Cancel on left, Install on right)
     int buttonWidth = (WindowSize::WIDTH - 2 * margin - 10) / 2; // 10px gap
-    installButton_ = CreateStyledButton(
-        L"Installa",
-        margin, currentY, buttonWidth, 45, ID_INSTALL_BUTTON, true
-    );
-
     cancelButton_ = CreateStyledButton(
         L"Annulla",
-        margin + buttonWidth + 10, currentY, buttonWidth, 45, ID_CANCEL_BUTTON, false
+        margin, currentY, buttonWidth, 45, ID_CANCEL_BUTTON, false
     );
-    ShowWindow(cancelButton_, SW_HIDE); // Initially hidden
+
+    installButton_ = CreateStyledButton(
+        L"Installa",
+        margin + buttonWidth + 10, currentY, buttonWidth, 45, ID_INSTALL_BUTTON, true
+    );
 }
 
 HWND UIManager::CreateStyledButton(const wchar_t* text, int x, int y, int width, int height, int id, bool isAccent)
@@ -217,6 +223,10 @@ HWND UIManager::CreateStyledButton(const wchar_t* text, int x, int y, int width,
         hwnd_, (HMENU)(UINT_PTR)id, hInstance_, nullptr
     );
     SendMessage(button, WM_SETFONT, (WPARAM)normalFont_, TRUE);
+
+    // Subclass the button to handle hover events
+    SetWindowSubclass(button, ButtonSubclassProc, id, (DWORD_PTR)this);
+
     return button;
 }
 
@@ -279,7 +289,7 @@ void UIManager::UpdateUI()
         EnableWindow(installButton_, TRUE);
         EnableWindow(pathEdit_, TRUE);
         EnableWindow(browseButton_, TRUE);
-        ShowWindow(cancelButton_, SW_HIDE);
+        EnableWindow(cancelButton_, TRUE);
         SetWindowText(statusLabel_, L"Pronto per l'installazione");
         break;
 
@@ -291,7 +301,6 @@ void UIManager::UpdateUI()
         EnableWindow(installButton_, FALSE);
         EnableWindow(pathEdit_, FALSE);
         EnableWindow(browseButton_, FALSE);
-        ShowWindow(cancelButton_, SW_SHOW);
         EnableWindow(cancelButton_, TRUE);
 
         if (currentState_ == InstallState::CheckingDotNet)
@@ -308,7 +317,7 @@ void UIManager::UpdateUI()
 
     case InstallState::Completed:
         EnableWindow(installButton_, FALSE);
-        ShowWindow(cancelButton_, SW_HIDE);
+        EnableWindow(cancelButton_, FALSE);
         SetWindowText(statusLabel_, L"Installazione completata con successo!");
         SetWindowText(installButton_, L"Chiudi");
         EnableWindow(installButton_, TRUE);
@@ -317,7 +326,7 @@ void UIManager::UpdateUI()
 
     case InstallState::Error:
         EnableWindow(installButton_, TRUE);
-        ShowWindow(cancelButton_, SW_HIDE);
+        EnableWindow(cancelButton_, FALSE);
         SetWindowText(statusLabel_, (L"Errore: " + errorMessage_).c_str());
         SetWindowText(installButton_, L"Riprova");
         break;
@@ -376,9 +385,99 @@ void UIManager::OnCloseButtonClick()
     PostQuitMessage(0);
 }
 
+void UIManager::OnCancelButtonClick()
+{
+    LogDebug(L"=== OnCancelButtonClick START ===");
+
+    // Log current state
+    wchar_t logMsg[256];
+    swprintf_s(logMsg, L"Current State: %d", (int)currentState_);
+    LogDebug(logMsg);
+
+    // Check if installation is in progress (not Welcome, Completed, or Error)
+    bool isInstalling = (currentState_ != InstallState::Welcome &&
+                        currentState_ != InstallState::Completed &&
+                        currentState_ != InstallState::Error);
+
+    // Determine the message based on state
+    const wchar_t* message = isInstalling ?
+        L"Sei sicuro di voler annullare l'installazione e chiudere l'installer?\n\nL'operazione in corso verrà interrotta." :
+        L"Sei sicuro di voler chiudere l'installer?";
+
+    const wchar_t* title = L"Conferma chiusura";
+
+    LogDebug(isInstalling ? L"Installation in progress" : L"Not installing");
+
+    // Show confirmation dialog
+    LogDebug(L"About to show MessageBox...");
+    int result = MessageBox(hwnd_, message, title, MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+
+    // Log what button was clicked
+    swprintf_s(logMsg, L"MessageBox result: %d (IDYES=%d, IDNO=%d)", result, IDYES, IDNO);
+    LogDebug(logMsg);
+
+    // User clicked Yes - always close the application
+    if (result == IDYES) {
+        LogDebug(L"User clicked YES - closing application");
+        DestroyWindow(hwnd_);
+        LogDebug(L"After DestroyWindow");
+    } else {
+        LogDebug(L"User clicked NO or closed dialog - continuing");
+    }
+
+    LogDebug(L"=== OnCancelButtonClick END ===\n");
+}
+
 void UIManager::OnMinimizeButtonClick()
 {
     ShowWindow(hwnd_, SW_MINIMIZE);
+}
+
+LRESULT CALLBACK UIManager::ButtonSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    UIManager* pThis = (UIManager*)dwRefData;
+
+    switch (uMsg) {
+    case WM_MOUSEMOVE: {
+        // Track mouse events for this button
+        TRACKMOUSEEVENT tme = { };
+        tme.cbSize = sizeof(TRACKMOUSEEVENT);
+        tme.dwFlags = TME_LEAVE | TME_HOVER;
+        tme.hwndTrack = hwnd;
+        tme.dwHoverTime = 1;
+        TrackMouseEvent(&tme);
+        break;
+    }
+
+    case WM_MOUSEHOVER: {
+        // Mouse is hovering over this button
+        if (pThis->hoveredButton_ != hwnd) {
+            HWND oldHovered = pThis->hoveredButton_;
+            pThis->hoveredButton_ = hwnd;
+
+            // Redraw both buttons
+            if (oldHovered) InvalidateRect(oldHovered, nullptr, TRUE);
+            InvalidateRect(hwnd, nullptr, TRUE);
+        }
+        break;
+    }
+
+    case WM_MOUSELEAVE: {
+        // Mouse left this button
+        if (pThis->hoveredButton_ == hwnd) {
+            pThis->hoveredButton_ = nullptr;
+            InvalidateRect(hwnd, nullptr, TRUE);
+        }
+        break;
+    }
+
+    case WM_NCDESTROY:
+        // Remove the subclass before the window is destroyed
+        RemoveWindowSubclass(hwnd, ButtonSubclassProc, uIdSubclass);
+        break;
+    }
+
+    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
 
 LRESULT CALLBACK UIManager::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -405,6 +504,12 @@ LRESULT UIManager::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg) {
     case WM_CLOSE:
+        LogDebug(L"WM_CLOSE received, calling PostQuitMessage(0)");
+        PostQuitMessage(0);
+        return 0;
+
+    case WM_DESTROY:
+        LogDebug(L"WM_DESTROY received, calling PostQuitMessage(0)");
         PostQuitMessage(0);
         return 0;
 
@@ -446,6 +551,9 @@ LRESULT UIManager::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         case ID_BROWSE_BUTTON:
             OnBrowseButtonClick();
             return 0;
+        case ID_CANCEL_BUTTON:
+            OnCancelButtonClick();
+            return 0;
         case ID_CLOSE_BUTTON:
             OnCloseButtonClick();
             return 0;
@@ -461,22 +569,63 @@ LRESULT UIManager::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
             HDC hdc = pDIS->hDC;
             RECT rect = pDIS->rcItem;
 
+            // Check if button is being hovered and if it's disabled
+            bool isHovered = (pDIS->hwndItem == hoveredButton_);
+            bool isDisabled = !IsWindowEnabled(pDIS->hwndItem);
+
             // Determine button color
             HBRUSH brush;
             COLORREF textColor = Colors::TEXT_PRIMARY;
+            bool needsDelete = false;
 
             if (pDIS->CtlID == ID_INSTALL_BUTTON) {
-                brush = accentBrush_;
+                if (isDisabled) {
+                    brush = CreateSolidBrush(RGB(140, 40, 60)); // Darker/opaque accent when disabled
+                    textColor = RGB(120, 120, 120); // Gray text when disabled
+                    needsDelete = true;
+                } else if (isHovered) {
+                    brush = CreateSolidBrush(RGB(250, 80, 110)); // Lighter accent on hover
+                    needsDelete = true;
+                } else {
+                    brush = accentBrush_;
+                }
             } else if (pDIS->CtlID == ID_CLOSE_BUTTON) {
-                brush = CreateSolidBrush(RGB(220, 50, 50));
+                if (isHovered) {
+                    brush = CreateSolidBrush(RGB(255, 70, 70)); // Brighter red on hover
+                } else {
+                    brush = CreateSolidBrush(RGB(220, 50, 50));
+                }
+                needsDelete = true;
+            } else if (pDIS->CtlID == ID_CANCEL_BUTTON) {
+                if (isDisabled) {
+                    brush = CreateSolidBrush(RGB(15, 20, 40)); // Darker secondary when disabled
+                    textColor = RGB(80, 80, 80); // Gray text when disabled
+                    needsDelete = true;
+                } else if (isHovered) {
+                    brush = CreateSolidBrush(RGB(35, 40, 75)); // Lighter secondary on hover
+                    needsDelete = true;
+                } else {
+                    brush = secondaryBrush_;
+                }
             } else {
-                brush = secondaryBrush_;
+                // Browse and Minimize buttons
+                if (isDisabled) {
+                    brush = CreateSolidBrush(RGB(15, 20, 40)); // Darker when disabled
+                    textColor = RGB(80, 80, 80); // Gray text when disabled
+                    needsDelete = true;
+                } else if (isHovered) {
+                    brush = CreateSolidBrush(RGB(35, 40, 75)); // Lighter secondary on hover
+                    needsDelete = true;
+                } else {
+                    brush = secondaryBrush_;
+                }
             }
 
             // Draw button background
             FillRect(hdc, &rect, brush);
 
-            if (pDIS->CtlID == ID_CLOSE_BUTTON) {
+            // Clean up created brushes
+            if (needsDelete) {
                 DeleteObject(brush);
             }
 
@@ -551,7 +700,7 @@ void UIManager::PaintWindow(HDC hdc)
     SetTextColor(hdc, Colors::TEXT_SECONDARY);
     SelectObject(hdc, footerFont_);
 
-    std::wstring footerText = L"v1.0.0 Designed by Fabio d'Agostino";
+    std::wstring footerText = L"v1.1.0 Designed by Fabio d'Agostino";
     DrawText(hdc, footerText.c_str(), -1, &footerRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 }
 

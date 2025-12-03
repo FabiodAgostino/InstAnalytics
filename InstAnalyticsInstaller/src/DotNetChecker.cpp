@@ -4,6 +4,7 @@
 #include <sstream>
 #include <array>
 #include <memory>
+#include <vector>
 
 namespace InstAnalyticsInstaller {
 
@@ -112,6 +113,120 @@ std::wstring DotNetChecker::GetDotNetDownloadUrl()
     default:
         return URLs::DOTNET_X64; // Default to x64
     }
+}
+
+bool DotNetChecker::VerifyAndFixDotNetPath()
+{
+    // First, check if dotnet command works
+    FILE* pipe = _wpopen(L"dotnet --version 2>&1", L"r");
+    if (!pipe) {
+        // Command not found, try to add to PATH
+        return AddDotNetToPath();
+    }
+
+    std::array<char, 128> buffer;
+    std::string result;
+
+    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+        result += buffer.data();
+    }
+
+    int exitCode = _pclose(pipe);
+
+    // Check if command succeeded and version 10 is present
+    if (exitCode == 0 && result.find("10.0.") != std::string::npos) {
+        return true; // dotnet command works and version 10 is available
+    }
+
+    // Command failed or version 10 not found, try to fix PATH
+    return AddDotNetToPath();
+}
+
+std::wstring DotNetChecker::FindDotNetInstallPath()
+{
+    // Common installation paths for .NET
+    std::vector<std::wstring> possiblePaths = {
+        L"C:\\Program Files\\dotnet",
+        L"C:\\Program Files (x86)\\dotnet"
+    };
+
+    // Check each path for dotnet.exe
+    for (const auto& path : possiblePaths) {
+        std::wstring dotnetExe = path + L"\\dotnet.exe";
+        DWORD fileAttr = GetFileAttributesW(dotnetExe.c_str());
+        if (fileAttr != INVALID_FILE_ATTRIBUTES && !(fileAttr & FILE_ATTRIBUTE_DIRECTORY)) {
+            return path;
+        }
+    }
+
+    return L"";
+}
+
+bool DotNetChecker::AddDotNetToPath()
+{
+    // Find .NET installation path
+    std::wstring dotnetPath = FindDotNetInstallPath();
+    if (dotnetPath.empty()) {
+        return false; // .NET not found
+    }
+
+    // Get current system PATH
+    HKEY hKey;
+    LONG result = RegOpenKeyExW(HKEY_LOCAL_MACHINE,
+        L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+        0, KEY_READ | KEY_WRITE, &hKey);
+
+    if (result != ERROR_SUCCESS) {
+        return false;
+    }
+
+    // Read current PATH value
+    wchar_t currentPath[32768];
+    DWORD pathSize = sizeof(currentPath);
+    DWORD pathType;
+
+    result = RegQueryValueExW(hKey, L"Path", nullptr, &pathType,
+        (LPBYTE)currentPath, &pathSize);
+
+    if (result != ERROR_SUCCESS) {
+        RegCloseKey(hKey);
+        return false;
+    }
+
+    // Check if dotnet path is already in PATH
+    std::wstring currentPathStr(currentPath);
+    if (currentPathStr.find(dotnetPath) != std::wstring::npos) {
+        RegCloseKey(hKey);
+
+        // Broadcast environment change message
+        SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+            (LPARAM)L"Environment", SMTO_ABORTIFHUNG, 5000, nullptr);
+
+        return true; // Already in PATH, just broadcast change
+    }
+
+    // Add dotnet path to PATH
+    std::wstring newPath = currentPathStr;
+    if (!newPath.empty() && newPath.back() != L';') {
+        newPath += L";";
+    }
+    newPath += dotnetPath;
+
+    // Write updated PATH back to registry
+    result = RegSetValueExW(hKey, L"Path", 0, pathType,
+        (LPBYTE)newPath.c_str(), (DWORD)((newPath.length() + 1) * sizeof(wchar_t)));
+
+    RegCloseKey(hKey);
+
+    if (result != ERROR_SUCCESS) {
+        return false;
+    }
+
+    // Broadcast environment change message to notify all windows
+    SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+        (LPARAM)L"Environment", SMTO_ABORTIFHUNG, 5000, nullptr);
+
+    return true;
 }
 
 } // namespace InstAnalyticsInstaller
