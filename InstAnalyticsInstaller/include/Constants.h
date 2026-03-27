@@ -18,7 +18,8 @@ namespace Colors {
 namespace URLs {
     const std::wstring DOTNET_X64 = L"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.100/dotnet-sdk-10.0.100-win-x64.exe";
     const std::wstring DOTNET_X86 = L"https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.100/dotnet-sdk-10.0.100-win-x86.exe";
-    const std::wstring INSTANALYTICS_ZIP = L"https://github.com/FabiodAgostino/InstAnalytics/releases/download/release/InstAnalytics.1.0.0.zip";
+    const std::wstring INSTANALYTICS_BASE = L"https://github.com/FabiodAgostino/InstAnalytics/releases/download/release/";
+    const std::wstring INSTANALYTICS_SUFFIX = L".zip";
 }
 
 // Application info

@@ -111,16 +111,37 @@ void PerformInstallation()
             Sleep(500);
         }
 
-        // Step 4: Download InstAnalytics
+        // Step 4: Get latest version and download InstAnalytics
         g_uiManager->SetState(InstallState::DownloadingApp);
+        g_uiManager->UpdateProgress(62, L"Verifica ultima versione...");
+
+        g_downloader = new Downloader();
+
+        std::wstring latestZipFilename;
+        bool versionSuccess = g_downloader->GetLatestVersion(
+            latestZipFilename,
+            [](int progress, const std::wstring& status) {
+                if (g_uiManager) {
+                    g_uiManager->UpdateProgress(62 + (progress / 10), status);
+                }
+            }
+        );
+
+        if (!versionSuccess) {
+            delete g_downloader;
+            g_uiManager->SetError(L"Errore durante la verifica della versione");
+            return;
+        }
+
+        // Construct download URL with zip filename from assets
+        std::wstring appZipUrl = URLs::INSTANALYTICS_BASE + latestZipFilename;
+
         g_uiManager->UpdateProgress(65, L"Download InstAnalytics...");
 
         std::wstring appZipPath = tempPath + L"InstAnalytics.zip";
 
-        g_downloader = new Downloader();
-
         bool appDownloadSuccess = g_downloader->DownloadFile(
-            URLs::INSTANALYTICS_ZIP,
+            appZipUrl,
             appZipPath,
             [](int progress, const std::wstring& status) {
                 if (g_uiManager) {

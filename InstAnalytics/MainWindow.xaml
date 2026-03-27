@@ -177,6 +177,18 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Hyperlink Style for Instagram profile links -->
+        <Style TargetType="Hyperlink">
+            <Setter Property="Foreground" Value="#4ECCA3"/>
+            <Setter Property="TextDecorations" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#80F0C8"/>
+                    <Setter Property="TextDecorations" Value="Underline"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Dark Button Style with Glassmorphism Effect -->
         <Style x:Key="DarkButton" TargetType="Button">
             <Setter Property="Background" Value="#BF252538"/>
@@ -353,11 +365,21 @@
                                         Style="{StaticResource CardStyle}"
                                         Visibility="Collapsed">
                                     <StackPanel>
-                                        <TextBlock Text="📊 Risultati Analisi"
-                                                   FontSize="18"
-                                                   FontWeight="Bold"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   Margin="0,0,0,15"/>
+                                        <Grid Margin="0,0,0,15">
+                                            <TextBlock Text="📊 Risultati Analisi"
+                                                       FontSize="18"
+                                                       FontWeight="Bold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                            <Button x:Name="AutoCleanButton"
+                                                    Content="🧹 Auto-Clean"
+                                                    Style="{StaticResource ModernButton}"
+                                                    HorizontalAlignment="Right"
+                                                    VerticalAlignment="Center"
+                                                    Padding="12,8"
+                                                    FontSize="12"
+                                                    Click="AutoCleanButton_Click"/>
+                                        </Grid>
 
                                         <!-- Results Grid - Row 1: Totals -->
                                         <Grid Margin="0,0,0,10">
@@ -458,7 +480,17 @@
                                                          BorderThickness="1"
                                                          MaxHeight="250"
                                                          FontSize="12"
-                                                         Margin="0,8,0,0"/>
+                                                         Margin="0,8,0,0">
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock>
+                                                                <Hyperlink Click="ProfileLink_Click" Tag="{Binding}">
+                                                                    <Run Text="{Binding Mode=OneWay}"/>
+                                                                </Hyperlink>
+                                                            </TextBlock>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
                                             </TabItem>
                                             <TabItem Header="Non segui" Style="{StaticResource ModernTabItem}">
                                                 <ListBox x:Name="NotFollowingListBox"
@@ -468,7 +500,17 @@
                                                          BorderThickness="1"
                                                          MaxHeight="250"
                                                          FontSize="12"
-                                                         Margin="0,8,0,0"/>
+                                                         Margin="0,8,0,0">
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock>
+                                                                <Hyperlink Click="ProfileLink_Click" Tag="{Binding}">
+                                                                    <Run Text="{Binding Mode=OneWay}"/>
+                                                                </Hyperlink>
+                                                            </TextBlock>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
                                             </TabItem>
                                             <TabItem Header="Followers reciproci" Style="{StaticResource ModernTabItem}">
                                                 <ListBox x:Name="MutualFollowersListBox"
@@ -478,7 +520,17 @@
                                                          BorderThickness="1"
                                                          MaxHeight="250"
                                                          FontSize="12"
-                                                         Margin="0,8,0,0"/>
+                                                         Margin="0,8,0,0">
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock>
+                                                                <Hyperlink Click="ProfileLink_Click" Tag="{Binding}">
+                                                                    <Run Text="{Binding Mode=OneWay}"/>
+                                                                </Hyperlink>
+                                                            </TextBlock>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
                                             </TabItem>
                                         </TabControl>
                                     </StackPanel>
@@ -490,161 +542,325 @@
 
                 <!-- Tab: Statistiche -->
                 <TabItem Header="Statistiche" Style="{StaticResource ModernTabItem}">
-                    <Grid Background="{StaticResource PrimaryBackgroundBrush}">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Margin="20">
-                                <TextBlock Text="Storico Analisi"
-                                           FontSize="22"
-                                           FontWeight="Bold"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           Margin="0,0,0,8"/>
-                                <TextBlock Text="Visualizza l'andamento storico dei tuoi followers e following"
-                                           FontSize="13"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           Margin="0,0,0,20"/>
+                    <TabControl Style="{StaticResource ModernTabControl}"
+                                Background="{StaticResource PrimaryBackgroundBrush}">
 
-                                <!-- Overview Cards -->
-                                <Grid Margin="0,0,0,20">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
+                        <!-- Sub-tab: Storico Analisi -->
+                        <TabItem Header="Storico Analisi" Style="{StaticResource ModernTabItem}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          Background="{StaticResource PrimaryBackgroundBrush}">
+                                <StackPanel Margin="20">
 
-                                    <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                    <!-- Overview Cards -->
+                                    <Grid Margin="0,0,0,20">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <TextBlock Text="📊 Analisi Totali"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding StatisticsViewModel.TotalAnalyses}"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="{StaticResource AccentBrush}"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <TextBlock Text="👥 Followers Attuali"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding StatisticsViewModel.CurrentFollowers}"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="#4ECCA3"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <TextBlock Text="🔔 Following Attuali"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding StatisticsViewModel.CurrentFollowing}"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="#FFD93D"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="3" Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <TextBlock Text="📈 Trend Crescita"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding StatisticsViewModel.GrowthTrend}"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="{Binding StatisticsViewModel.GrowthTrendValue, Converter={StaticResource GrowthTrendColorConverter}}"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Trends Chart -->
+                                    <Border Style="{StaticResource CardStyle}" Margin="0,0,0,20">
                                         <StackPanel>
-                                            <TextBlock Text="📊 Analisi Totali"
-                                                       FontSize="12"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                                            <TextBlock Text="{Binding StatisticsViewModel.TotalAnalyses}"
-                                                       FontSize="28"
-                                                       FontWeight="Bold"
-                                                       Foreground="{StaticResource AccentBrush}"
-                                                       Margin="0,4,0,0"/>
+                                            <TextBlock Text="📈 Andamento Followers e Following"
+                                                       FontSize="16"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       Margin="0,0,0,15"/>
+                                            <ScottPlot:WpfPlot x:Name="TrendsChart"
+                                                               Height="300"
+                                                               Background="#BF1A1A2E"/>
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Grid.Column="1" Style="{StaticResource CardStyle}">
-                                        <StackPanel>
-                                            <TextBlock Text="👥 Followers Attuali"
-                                                       FontSize="12"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                                            <TextBlock Text="{Binding StatisticsViewModel.CurrentFollowers}"
-                                                       FontSize="28"
-                                                       FontWeight="Bold"
-                                                       Foreground="#4ECCA3"
-                                                       Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <Border Grid.Column="2" Style="{StaticResource CardStyle}">
-                                        <StackPanel>
-                                            <TextBlock Text="🔔 Following Attuali"
-                                                       FontSize="12"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                                            <TextBlock Text="{Binding StatisticsViewModel.CurrentFollowing}"
-                                                       FontSize="28"
-                                                       FontWeight="Bold"
-                                                       Foreground="#FFD93D"
-                                                       Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <Border Grid.Column="3" Style="{StaticResource CardStyle}">
-                                        <StackPanel>
-                                            <TextBlock Text="📈 Trend Crescita"
-                                                       FontSize="12"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                                            <TextBlock Text="{Binding StatisticsViewModel.GrowthTrend}"
-                                                       FontSize="28"
-                                                       FontWeight="Bold"
-                                                       Foreground="{Binding StatisticsViewModel.GrowthTrendValue, Converter={StaticResource GrowthTrendColorConverter}}"
-                                                       Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
-
-                                <!-- Trends Chart -->
-                                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,20">
-                                    <StackPanel>
-                                        <TextBlock Text="📈 Andamento Followers e Following"
-                                                   FontSize="16"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   Margin="0,0,0,15"/>
-                                        <ScottPlot:WpfPlot x:Name="TrendsChart"
-                                                           Height="300"
-                                                           Background="#BF1A1A2E"/>
-                                    </StackPanel>
-                                </Border>
-
-                                <!--  Historical Data Grid (Collapsible) -->
-                                <Border Style="{StaticResource CardStyle}">
-                                    <Expander IsExpanded="False">
-                                        <Expander.Header>
-                                            <Grid>
-                                                <TextBlock Text="📊 Storico Analisi"
+                                    <!-- Historical Data Grid (Collapsible) -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <Expander IsExpanded="False">
+                                            <Expander.Header>
+                                                <TextBlock Text="📋 Dati Grezzi"
                                                            FontSize="16"
                                                            FontWeight="SemiBold"
                                                            Foreground="{StaticResource TextPrimaryBrush}"
                                                            VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Expander.Header>
-                                        <Expander.Style>
-                                            <Style TargetType="Expander">
-                                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                                                <Setter Property="Background" Value="Transparent"/>
-                                            </Style>
-                                        </Expander.Style>
-                                        <StackPanel Margin="0,10,0,0">
-                                            <Button Content="🗑️ Elimina Analisi Selezionata"
+                                            </Expander.Header>
+                                            <Expander.Style>
+                                                <Style TargetType="Expander">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                </Style>
+                                            </Expander.Style>
+                                            <StackPanel Margin="0,10,0,0">
+                                                <Button Content="🗑️ Elimina Analisi Selezionata"
+                                                        Style="{StaticResource ModernButton}"
+                                                        Click="DeleteAnalysis_Click"
+                                                        HorizontalAlignment="Right"
+                                                        Padding="12,8"
+                                                        FontSize="12"
+                                                        Margin="0,0,0,10"
+                                                        Background="#8B0000"
+                                                        IsEnabled="{Binding ElementName=HistoricalDataGrid, Path=SelectedItem, Converter={StaticResource NullToBooleanConverter}}"/>
+                                                <DataGrid x:Name="HistoricalDataGrid"
+                                                          AutoGenerateColumns="False"
+                                                          IsReadOnly="True"
+                                                          Background="#BF1A1A2E"
+                                                          Foreground="{StaticResource TextPrimaryBrush}"
+                                                          BorderBrush="{StaticResource GlassBorderBrush}"
+                                                          BorderThickness="1"
+                                                          GridLinesVisibility="None"
+                                                          HeadersVisibility="Column"
+                                                          RowBackground="#BF16213E"
+                                                          AlternatingRowBackground="#D916213E"
+                                                          MaxHeight="400"
+                                                          SelectionMode="Single">
+                                                    <DataGrid.ColumnHeaderStyle>
+                                                        <Style TargetType="DataGridColumnHeader">
+                                                            <Setter Property="Background" Value="#BF16213E"/>
+                                                            <Setter Property="Foreground" Value="White"/>
+                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            <Setter Property="Padding" Value="10,8"/>
+                                                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource GlassBorderBrush}"/>
+                                                        </Style>
+                                                    </DataGrid.ColumnHeaderStyle>
+                                                    <DataGrid.Columns>
+                                                        <DataGridTextColumn Header="Data" Binding="{Binding Timestamp, StringFormat=dd/MM/yyyy HH:mm}" Width="150"/>
+                                                        <DataGridTextColumn Header="Followers" Binding="{Binding FollowersCount}" Width="*"/>
+                                                        <DataGridTextColumn Header="Following" Binding="{Binding FollowingCount}" Width="*"/>
+                                                        <DataGridTextColumn Header="Rapporto" Binding="{Binding Ratio, StringFormat=F2}" Width="*"/>
+                                                    </DataGrid.Columns>
+                                                </DataGrid>
+                                            </StackPanel>
+                                        </Expander>
+                                    </Border>
+
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <!-- Sub-tab: Storico Rimozioni -->
+                        <TabItem Header="Storico Rimozioni" Style="{StaticResource ModernTabItem}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          Background="{StaticResource PrimaryBackgroundBrush}">
+                                <StackPanel Margin="20">
+
+                                    <!-- Removal Overview Cards -->
+                                    <Grid Margin="0,0,0,20">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <TextBlock Text="🧹 Sessioni Totali"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock x:Name="TotalRemovalSessionsText"
+                                                           Text="0"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="{StaticResource AccentBrush}"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <TextBlock Text="👤 Rimossi dagli Amici"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock x:Name="TotalUnfollowedText"
+                                                           Text="0"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="#4ECCA3"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <TextBlock Text="🚫 Rimossi dal Tracking"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock x:Name="TotalExcludedText"
+                                                           Text="0"
+                                                           FontSize="28"
+                                                           FontWeight="Bold"
+                                                           Foreground="#FFD93D"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Removal Chart -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock Text="📉 Rimozioni per Sessione"
+                                                       FontSize="16"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       Margin="0,0,0,15"/>
+                                            <ScottPlot:WpfPlot x:Name="RemovalChart"
+                                                               Height="300"
+                                                               Background="#BF1A1A2E"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                    </TabControl>
+                </TabItem>
+                <!-- Tab: Esclusi -->
+                <TabItem Header="Esclusi" Style="{StaticResource ModernTabItem}">
+                    <Grid Background="{StaticResource PrimaryBackgroundBrush}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="20">
+                                <TextBlock Text="Utenti Esclusi"
+                                           FontSize="22"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock Text="Gli utenti in questa lista vengono esclusi dai risultati dell'analisi"
+                                           FontSize="13"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,20"/>
+
+                                <!-- Chrome Extension / HTTP Server Info -->
+                                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,20">
+                                    <StackPanel>
+                                        <TextBlock Text="Integrazione Estensione Chrome"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   Margin="0,0,0,10"/>
+                                        <TextBlock x:Name="HttpServerStatusText"
+                                                   FontSize="13"
+                                                   Foreground="#4ECCA3"
+                                                   Margin="0,0,0,8"/>
+                                        <TextBlock Text="Installa l'estensione Chrome dalla cartella ChromeExtension/ del progetto per inviare segnali di esclusione direttamente dai profili Instagram."
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Excluded Users List -->
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,10">
+                                            <TextBlock Text="Lista Esclusi"
+                                                       FontSize="16"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                            <Button Content="Rimuovi Selezione"
                                                     Style="{StaticResource ModernButton}"
-                                                    Click="DeleteAnalysis_Click"
                                                     HorizontalAlignment="Right"
+                                                    Click="RemoveExclusion_Click"
                                                     Padding="12,8"
                                                     FontSize="12"
-                                                    Margin="0,0,0,10"
                                                     Background="#8B0000"
-                                                    IsEnabled="{Binding ElementName=HistoricalDataGrid, Path=SelectedItem, Converter={StaticResource NullToBooleanConverter}}"/>
-                                            <DataGrid x:Name="HistoricalDataGrid"
-                                                      AutoGenerateColumns="False"
-                                                      IsReadOnly="True"
-                                                      Background="#BF1A1A2E"
-                                                      Foreground="{StaticResource TextPrimaryBrush}"
-                                                      BorderBrush="{StaticResource GlassBorderBrush}"
-                                                      BorderThickness="1"
-                                                      GridLinesVisibility="None"
-                                                      HeadersVisibility="Column"
-                                                      RowBackground="#BF16213E"
-                                                      AlternatingRowBackground="#D916213E"
-                                                      MaxHeight="400"
-                                                      SelectionMode="Single">
-                                                <DataGrid.ColumnHeaderStyle>
-                                                    <Style TargetType="DataGridColumnHeader">
-                                                        <Setter Property="Background" Value="#BF16213E"/>
-                                                        <Setter Property="Foreground" Value="White"/>
-                                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                                        <Setter Property="Padding" Value="10,8"/>
-                                                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                                                        <Setter Property="BorderBrush" Value="{StaticResource GlassBorderBrush}"/>
-                                                    </Style>
-                                                </DataGrid.ColumnHeaderStyle>
-                                                <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Data" Binding="{Binding Timestamp, StringFormat=dd/MM/yyyy HH:mm}" Width="150"/>
-                                                    <DataGridTextColumn Header="Followers" Binding="{Binding FollowersCount}" Width="*"/>
-                                                    <DataGridTextColumn Header="Following" Binding="{Binding FollowingCount}" Width="*"/>
-                                                    <DataGridTextColumn Header="Rapporto" Binding="{Binding Ratio, StringFormat=F2}" Width="*"/>
-                                                </DataGrid.Columns>
-                                            </DataGrid>
-                                        </StackPanel>
-                                    </Expander>
+                                                    IsEnabled="{Binding ElementName=ExcludedListBox, Path=SelectedItem, Converter={StaticResource NullToBooleanConverter}}"/>
+                                        </Grid>
+                                        <ListBox x:Name="ExcludedListBox"
+                                                 Background="#BF1A1A2E"
+                                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                                 BorderBrush="{StaticResource GlassBorderBrush}"
+                                                 BorderThickness="1"
+                                                 MaxHeight="400"
+                                                 FontSize="12">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock>
+                                                        <Hyperlink Click="ProfileLink_Click" Tag="{Binding}">
+                                                            <Run Text="{Binding Mode=OneWay}"/>
+                                                        </Hyperlink>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
                 </TabItem>
             </TabControl>
+
+            <!-- Exclusion Toast Notification -->
+            <Border x:Name="ExclusionToast"
+                    Grid.Row="1"
+                    VerticalAlignment="Top"
+                    Background="#DD1B3A2A"
+                    BorderBrush="#4ECCA3"
+                    BorderThickness="0,0,0,2"
+                    Padding="20,10"
+                    Visibility="Collapsed"
+                    Panel.ZIndex="100">
+                <TextBlock x:Name="ExclusionToastText"
+                           Foreground="#4ECCA3"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"/>
+            </Border>
 
             <!-- Info Modal Overlay -->
             <Grid x:Name="InfoModalOverlay"
@@ -772,12 +988,108 @@
                     BorderThickness="0,1,0,0"
                     CornerRadius="0,0,12,12"
                     Padding="10,8">
-                <TextBlock Text="v1.0.0 Designed by Fabio d'Agostino"
+                <TextBlock Text="v1.1.0 Designed by Fabio d'Agostino"
                            FontSize="11"
                            Foreground="{StaticResource TextSecondaryBrush}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"/>
             </Border>
+
+            <!-- Auto-Clean Modal Overlay -->
+            <Grid x:Name="AutoCleanModalOverlay"
+                  Grid.Row="0"
+                  Grid.RowSpan="3"
+                  Background="#CC000000"
+                  Visibility="Collapsed">
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        BorderBrush="{StaticResource GlassBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="16"
+                        Width="420"
+                        Padding="30"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MouseLeftButtonDown="ModalContent_Click">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#000000" Opacity="0.3" BlurRadius="40" ShadowDepth="0"/>
+                    </Border.Effect>
+
+                    <StackPanel>
+                        <!-- Header -->
+                        <TextBlock Text="🧹 Auto-Clean"
+                                   FontSize="20"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,24"/>
+
+                        <!-- Progress Panel -->
+                        <StackPanel x:Name="AutoCleanProgressPanel">
+                            <TextBlock x:Name="AutoCleanProgressText"
+                                       Text="0 / 0"
+                                       FontSize="28"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,12"/>
+
+                            <ProgressBar x:Name="AutoCleanProgressBar"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         Value="0"
+                                         Height="8"
+                                         Background="#2A2A3E"
+                                         Foreground="#4ECCA3"
+                                         BorderThickness="0"
+                                         Margin="0,0,0,20"/>
+
+                            <TextBlock x:Name="AutoCleanCurrentUserText"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,6"/>
+
+                            <TextBlock x:Name="AutoCleanStatusText"
+                                       FontSize="13"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,24"/>
+
+                            <Button Content="Annulla"
+                                    Style="{StaticResource DarkButton}"
+                                    HorizontalAlignment="Center"
+                                    Padding="20,10"
+                                    Click="CancelAutoClean_Click"/>
+                        </StackPanel>
+
+                        <!-- Done Panel -->
+                        <StackPanel x:Name="AutoCleanDonePanel" Visibility="Collapsed">
+                            <TextBlock Text="✅ Completato"
+                                       FontSize="18"
+                                       FontWeight="Bold"
+                                       Foreground="#4ECCA3"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,16"/>
+
+                            <TextBlock x:Name="AutoCleanDoneSummaryText"
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"
+                                       LineHeight="22"
+                                       Margin="0,0,0,24"/>
+
+                            <Button Content="Chiudi"
+                                    Style="{StaticResource ModernButton}"
+                                    HorizontalAlignment="Center"
+                                    Padding="20,10"
+                                    Click="CloseAutoCleanModal_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
         </Grid>
     </Border>
 </Window>

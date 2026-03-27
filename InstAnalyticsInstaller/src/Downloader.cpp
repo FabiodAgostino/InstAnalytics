@@ -63,6 +63,74 @@ DWORD CALLBACK Downloader::ProgressRoutine(
     return PROGRESS_CONTINUE;
 }
 
+bool Downloader::GetLatestVersion(std::wstring& outVersion, ProgressCallback callback)
+{
+    cancelled_ = false;
+
+    std::wstring apiUrl = L"https://api.github.com/repos/FabiodAgostino/InstAnalytics/releases/latest";
+
+    // Use WinINet for download
+    HINTERNET hInternet = InternetOpenW(L"InstAnalyticsInstaller",
+        INTERNET_OPEN_TYPE_DIRECT, nullptr, nullptr, 0);
+
+    if (!hInternet) {
+        return false;
+    }
+
+    HINTERNET hUrl = InternetOpenUrlW(hInternet, apiUrl.c_str(), nullptr, 0,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_KEEP_CONNECTION, 0);
+
+    if (!hUrl) {
+        InternetCloseHandle(hInternet);
+        return false;
+    }
+
+    // Read response
+    const DWORD BUFFER_SIZE = 8192;
+    BYTE buffer[BUFFER_SIZE];
+    std::string jsonResponse;
+
+    DWORD bytesRead = 0;
+    while (InternetReadFile(hUrl, buffer, BUFFER_SIZE, &bytesRead) && bytesRead > 0) {
+        jsonResponse.append(reinterpret_cast<char*>(buffer), bytesRead);
+    }
+
+    InternetCloseHandle(hUrl);
+    InternetCloseHandle(hInternet);
+
+    if (jsonResponse.empty()) {
+        return false;
+    }
+
+    // Parse JSON to get zip filename from assets
+    std::wstring jsonW(jsonResponse.begin(), jsonResponse.end());
+    return ParseGitHubAssetsForZip(jsonW, outVersion);
+}
+
+bool Downloader::ParseGitHubAssetsForZip(const std::wstring& json, std::wstring& outZipFilename)
+{
+    // Find "name":"InstAnalytics.*.zip" in the assets array
+    size_t assetsPos = json.find(L"\"assets\":");
+    if (assetsPos == std::wstring::npos) {
+        return false;
+    }
+
+    // Search for InstAnalytics pattern in the JSON
+    size_t namePos = json.find(L"\"name\":\"InstAnalytics.");
+    if (namePos == std::wstring::npos) {
+        return false;
+    }
+
+    namePos += 8; // skip "\"name\":\""
+    size_t nameEnd = json.find(L"\"", namePos);
+    if (nameEnd == std::wstring::npos) {
+        return false;
+    }
+
+    outZipFilename = json.substr(namePos, nameEnd - namePos);
+    return !outZipFilename.empty();
+}
+
 bool Downloader::DownloadFile(const std::wstring& url, const std::wstring& outputPath, ProgressCallback callback)
 {
     cancelled_ = false;

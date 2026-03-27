@@ -36,6 +36,7 @@ UIManager::UIManager(HINSTANCE hInstance)
     , cancelButton_(nullptr)
     , closeButton_(nullptr)
     , minimizeButton_(nullptr)
+    , extensionLabel_(nullptr)
     , currentState_(InstallState::Welcome)
     , installPath_(AppInfo::DEFAULT_INSTALL_PATH)
     , titleFont_(nullptr)
@@ -212,6 +213,16 @@ void UIManager::CreateControls()
         L"Installa",
         margin + buttonWidth + 10, currentY, buttonWidth, 45, ID_INSTALL_BUTTON, true
     );
+    currentY += 55;
+
+    // Chrome Extension path info — hidden until installation completes
+    extensionLabel_ = CreateWindowEx(
+        0, L"STATIC", L"",
+        WS_CHILD | SS_LEFT | SS_EDITCONTROL,
+        margin, currentY, WindowSize::WIDTH - 2 * margin, 40,
+        hwnd_, (HMENU)2010, hInstance_, nullptr
+    );
+    SendMessage(extensionLabel_, WM_SETFONT, (WPARAM)footerFont_, TRUE);
 }
 
 HWND UIManager::CreateStyledButton(const wchar_t* text, int x, int y, int width, int height, int id, bool isAccent)
@@ -322,6 +333,16 @@ void UIManager::UpdateUI()
         SetWindowText(installButton_, L"Chiudi");
         EnableWindow(installButton_, TRUE);
         SendMessage(progressBar_, PBM_SETPOS, 100, 0);
+        {
+            // Show Chrome Extension path
+            wchar_t extMsg[1024];
+            swprintf_s(extMsg,
+                L"Estensione Chrome installata in:\r\n%s\\ChromeExtension",
+                installPath_.c_str());
+            SetWindowText(extensionLabel_, extMsg);
+            ShowWindow(extensionLabel_, SW_SHOW);
+            InvalidateRect(hwnd_, nullptr, TRUE);
+        }
         break;
 
     case InstallState::Error:

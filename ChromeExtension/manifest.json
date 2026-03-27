@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "InstAnalytics",
+  "version": "1.0.0",
+  "description": "Escludi un profilo Instagram dal tracking in InstAnalytics con un clic.",
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "http://localhost:27182/*",
+    "https://www.instagram.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "InstAnalytics"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -39,6 +39,7 @@ private:
     HWND hwnd_;
     HWND progressBar_;
     HWND statusLabel_;
+    HWND extensionLabel_;
     HWND pathEdit_;
     HWND browseButton_;
     HWND installButton_;

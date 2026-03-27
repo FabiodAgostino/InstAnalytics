@@ -2,7 +2,9 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Threading;
 using InstAnalytics.Models;
 using InstAnalytics.Services;
 using InstAnalytics.ViewModels;
@@ -17,10 +19,28 @@ public partial class MainWindow : Window
 {
     private readonly InstagramAnalyzerService _analyzer;
     private readonly HistoricalDataService _historicalDataService;
+    private readonly RemovalHistoryService _removalHistoryService;
     private readonly StatisticsViewModel _statisticsViewModel;
+    private readonly ExclusionService _exclusionService;
+    private LocalHttpServer? _httpServer;
+    private DispatcherTimer? _toastTimer;
+    // Raw (pre-exclusion) results — re-filtered on every exclusion change
+    private List<string> _rawNotFollowingBack = [];
+    private List<string> _rawNotFollowing = [];
+    private List<string> _rawMutualFollowers = [];
     private string? _zipFilePath;
     private string? _oldZipFilePath;
     private bool? _analyzed;
+
+    // Auto-Clean state
+    private Queue<string>? _autoCleanQueue;
+    private int _autoCleanTotal;
+    private int _autoCleanProcessed;
+    private int _autoCleanUnfollowed;
+    private int _autoCleanExcluded;
+    private bool _autoCleanCancelled;
+    private string _autoCleanCurrentUser = "";
+    private AutoCleanFloatingWindow? _floatingWindow;
 
 
     public MainWindow()
@@ -28,20 +48,113 @@ public partial class MainWindow : Window
         InitializeComponent();
         _analyzer = new InstagramAnalyzerService();
         _historicalDataService = new HistoricalDataService();
+        _removalHistoryService = new RemovalHistoryService();
         _statisticsViewModel = new StatisticsViewModel();
+        _exclusionService = new ExclusionService();
 
         // Set DataContext for statistics
         this.DataContext = this;
 
         // Load historical data on startup
         Loaded += MainWindow_Loaded;
+
+        // Floating window visibility: hide when main window is active, show when background
+        Activated   += (_, _) => { if (_floatingWindow?.IsDone == false) _floatingWindow.Hide(); };
+        Deactivated += (_, _) => { if (_autoCleanQueue != null) _floatingWindow?.Show(); };
     }
 
     public StatisticsViewModel StatisticsViewModel => _statisticsViewModel;
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        await _exclusionService.LoadAsync();
+        InitializeHttpServer();
         await LoadHistoricalDataAsync();
+        RefreshExcludedList();
+    }
+
+    private void InitializeHttpServer()
+    {
+        _httpServer = new LocalHttpServer(_exclusionService);
+        _httpServer.UserExcluded += username =>
+            Dispatcher.Invoke(() =>
+            {
+                ShowExclusionToast($"@{username} aggiunto agli esclusi");
+                RefreshExcludedList();
+                ApplyFiltersAndRefreshLists();
+            });
+
+        _httpServer.UnfollowResultReceived += (username, status) =>
+            Dispatcher.Invoke(() => HandleUnfollowResult(username, status));
+
+        _httpServer.Start();
+        UpdateHttpServerStatus();
+    }
+
+    private void UpdateHttpServerStatus()
+    {
+        if (_httpServer is null) return;
+        if (_httpServer.IsRunning)
+        {
+            HttpServerStatusText.Text =
+                $"Server locale in esecuzione sulla porta {LocalHttpServer.Port}";
+            HttpServerStatusText.Foreground =
+                new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(0x4E, 0xCC, 0xA3));
+        }
+        else
+        {
+            HttpServerStatusText.Text =
+                $"Server locale non disponibile (porta {LocalHttpServer.Port} occupata)";
+            HttpServerStatusText.Foreground =
+                new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(0xE9, 0x45, 0x60));
+        }
+    }
+
+    private void RefreshExcludedList()
+    {
+        ExcludedListBox.ItemsSource = _exclusionService.GetAll();
+    }
+
+    private void ApplyFiltersAndRefreshLists()
+    {
+        var notFollowingBack  = _rawNotFollowingBack.Where(u => !_exclusionService.IsExcluded(u)).ToList();
+        var notFollowing      = _rawNotFollowing.Where(u => !_exclusionService.IsExcluded(u)).ToList();
+        var mutualFollowers   = _rawMutualFollowers.Where(u => !_exclusionService.IsExcluded(u)).ToList();
+
+        NotFollowingBackListBox.ItemsSource = notFollowingBack;
+        NotFollowingListBox.ItemsSource     = notFollowing;
+        MutualFollowersListBox.ItemsSource  = mutualFollowers;
+
+        if (ResultsCard.Visibility == Visibility.Visible)
+        {
+            NotFollowingBackCountText.Text   = notFollowingBack.Count.ToString();
+            NotFollowingCountText.Text       = notFollowing.Count.ToString();
+            MutualFollowersCountText.Text    = mutualFollowers.Count.ToString();
+        }
+    }
+
+    private void ShowExclusionToast(string message)
+    {
+        ExclusionToastText.Text = message;
+        ExclusionToast.Visibility = Visibility.Visible;
+
+        _toastTimer?.Stop();
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _toastTimer.Tick += (_, _) =>
+        {
+            ExclusionToast.Visibility = Visibility.Collapsed;
+            _toastTimer?.Stop();
+        };
+        _toastTimer.Start();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _floatingWindow?.Close();
+        _httpServer?.Dispose();
+        base.OnClosed(e);
     }
 
     private async Task LoadHistoricalDataAsync()
@@ -56,6 +169,10 @@ public partial class MainWindow : Window
 
             // Update chart
             UpdateTrendsChart(analyses);
+
+            // Load removal sessions
+            var sessions = await _removalHistoryService.LoadSessionsAsync();
+            UpdateRemovalChart(sessions);
         }
         catch (Exception ex)
         {
@@ -235,6 +352,56 @@ public partial class MainWindow : Window
 
         // Refresh the plot
         TrendsChart.Refresh();
+    }
+
+    private void UpdateRemovalChart(List<InstAnalytics.Models.RemovalSession> sessions)
+    {
+        // Update summary cards
+        TotalRemovalSessionsText.Text = sessions.Count.ToString();
+        TotalUnfollowedText.Text = sessions.Sum(s => s.UnfollowedCount).ToString();
+        TotalExcludedText.Text = sessions.Sum(s => s.ExcludedCount).ToString();
+
+        RemovalChart.Plot.Clear();
+
+        if (!sessions.Any())
+        {
+            RemovalChart.Refresh();
+            return;
+        }
+
+        var ordered = sessions.OrderBy(s => s.Date).ToList();
+        var xValues = ordered.Select((_, i) => (double)i).ToArray();
+        var unfollowedValues = ordered.Select(s => (double)s.UnfollowedCount).ToArray();
+        var excludedValues   = ordered.Select(s => (double)s.ExcludedCount).ToArray();
+
+        var unfollowedPlot = RemovalChart.Plot.Add.Scatter(xValues, unfollowedValues);
+        unfollowedPlot.LegendText = "Rimossi dagli amici";
+        unfollowedPlot.Color = ScottPlot.Color.FromHex("#4ECCA3");
+        unfollowedPlot.LineWidth = 3;
+        unfollowedPlot.MarkerSize = 10;
+
+        var excludedPlot = RemovalChart.Plot.Add.Scatter(xValues, excludedValues);
+        excludedPlot.LegendText = "Rimossi dal tracking";
+        excludedPlot.Color = ScottPlot.Color.FromHex("#FFD93D");
+        excludedPlot.LineWidth = 3;
+        excludedPlot.MarkerSize = 10;
+
+        RemovalChart.Plot.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(
+            xValues.Select((x, i) => new ScottPlot.Tick(x, ordered[i].Date.ToString("dd/MM"))).ToArray()
+        );
+
+        RemovalChart.Plot.FigureBackground.Color = ScottPlot.Color.FromHex("#1A1A2E");
+        RemovalChart.Plot.DataBackground.Color   = ScottPlot.Color.FromHex("#1A1A2E");
+        RemovalChart.Plot.Axes.Color(ScottPlot.Color.FromHex("#A0A0A0"));
+        RemovalChart.Plot.Grid.MajorLineColor = ScottPlot.Color.FromHex("#2A2A3E");
+
+        RemovalChart.Plot.ShowLegend();
+        RemovalChart.Plot.Legend.BackgroundColor = ScottPlot.Color.FromHex("#16213E");
+        RemovalChart.Plot.Legend.FontColor       = ScottPlot.Color.FromHex("#EAEAEA");
+        RemovalChart.Plot.Legend.OutlineColor    = ScottPlot.Color.FromHex("#2A2A3E");
+
+        RemovalChart.Plot.Axes.AutoScale();
+        RemovalChart.Refresh();
     }
 
     #region Window Controls
@@ -478,9 +645,18 @@ public partial class MainWindow : Window
             var followersUsernames = followers.Select(f => f.Username).ToHashSet();
             var followingUsernames = following.Select(f => f.Username).ToHashSet();
 
-            var notFollowingBack = following.Where(f => !followersUsernames.Contains(f.Username)).ToList();
-            var notFollowing = followers.Where(f => !followingUsernames.Contains(f.Username)).ToList();
-            var mutualFollowers = followers.Where(f => followingUsernames.Contains(f.Username)).ToList();
+            _rawNotFollowingBack = following
+                .Where(f => !followersUsernames.Contains(f.Username))
+                .Select(f => f.Username)
+                .ToList();
+            _rawNotFollowing = followers
+                .Where(f => !followingUsernames.Contains(f.Username))
+                .Select(f => f.Username)
+                .ToList();
+            _rawMutualFollowers = followers
+                .Where(f => followingUsernames.Contains(f.Username))
+                .Select(f => f.Username)
+                .ToList();
 
             // Save to historical data
             var followersList = followers.Select(f => f.Username).ToList();
@@ -497,13 +673,7 @@ public partial class MainWindow : Window
             // Update Analysis Tab
             TotalFollowersCountText.Text = followers.Count.ToString();
             TotalFollowingCountText.Text = following.Count.ToString();
-            NotFollowingBackCountText.Text = notFollowingBack.Count.ToString();
-            NotFollowingCountText.Text = notFollowing.Count.ToString();
-            MutualFollowersCountText.Text = mutualFollowers.Count.ToString();
-
-            NotFollowingBackListBox.ItemsSource = notFollowingBack.Select(u => u.Username).ToList();
-            NotFollowingListBox.ItemsSource = notFollowing.Select(u => u.Username).ToList();
-            MutualFollowersListBox.ItemsSource = mutualFollowers.Select(u => u.Username).ToList();
+            ApplyFiltersAndRefreshLists();
 
             // Show results
             ResultsCard.Visibility = Visibility.Visible;
@@ -549,6 +719,34 @@ public partial class MainWindow : Window
 
     #endregion
 
+    #region Profile Links
+
+    private void ProfileLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Hyperlink link && link.Tag is string username)
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                $"https://www.instagram.com/{username}/?ia_unfollow=1")
+            { UseShellExecute = true });
+        }
+    }
+
+    #endregion
+
+    #region Exclusion Management
+
+    private async void RemoveExclusion_Click(object sender, RoutedEventArgs e)
+    {
+        if (ExcludedListBox.SelectedItem is string username)
+        {
+            await _exclusionService.RemoveAsync(username);
+            RefreshExcludedList();
+            ApplyFiltersAndRefreshLists();
+        }
+    }
+
+    #endregion
+
     #region Modal Management
 
     private void InfoButton_Click(object sender, RoutedEventArgs e)
@@ -565,6 +763,236 @@ public partial class MainWindow : Window
     {
         // Prevent closing when clicking inside the modal content
         e.Handled = true;
+    }
+
+    #endregion
+
+    #region Auto-Clean
+
+    // ── Resume persistence ────────────────────────────────────────────────────
+
+    private static readonly string _resumeFilePath = System.IO.Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "HistoricalData", "autoclean_resume.json");
+
+    private static readonly System.Text.Json.JsonSerializerOptions _resumeJsonOpts =
+        new() { WriteIndented = true };
+
+    private sealed class AutoCleanResume
+    {
+        public List<string> RemainingUsers  { get; set; } = [];
+        public int          Total           { get; set; }
+        public int          ProcessedBefore { get; set; }
+        public int          UnfollowedBefore{ get; set; }
+        public int          ExcludedBefore  { get; set; }
+    }
+
+    private AutoCleanResume? LoadResume()
+    {
+        if (!System.IO.File.Exists(_resumeFilePath)) return null;
+        try
+        {
+            var json = System.IO.File.ReadAllText(_resumeFilePath);
+            return System.Text.Json.JsonSerializer.Deserialize<AutoCleanResume>(json, _resumeJsonOpts);
+        }
+        catch { return null; }
+    }
+
+    private void SaveResume(IEnumerable<string> remaining)
+    {
+        var list = remaining.ToList();
+        if (!list.Any()) { DeleteResume(); return; }
+
+        var data = new AutoCleanResume
+        {
+            RemainingUsers   = list,
+            Total            = _autoCleanTotal,
+            ProcessedBefore  = _autoCleanProcessed,
+            UnfollowedBefore = _autoCleanUnfollowed,
+            ExcludedBefore   = _autoCleanExcluded,
+        };
+        System.IO.Directory.CreateDirectory(
+            System.IO.Path.GetDirectoryName(_resumeFilePath)!);
+        System.IO.File.WriteAllText(
+            _resumeFilePath,
+            System.Text.Json.JsonSerializer.Serialize(data, _resumeJsonOpts));
+    }
+
+    private static void DeleteResume()
+    {
+        try { System.IO.File.Delete(_resumeFilePath); } catch { }
+    }
+
+    // ── Button handler ────────────────────────────────────────────────────────
+
+    private void AutoCleanButton_Click(object sender, RoutedEventArgs e)
+    {
+        var fullList = _rawNotFollowingBack.Where(u => !_exclusionService.IsExcluded(u)).ToList();
+        if (!fullList.Any())
+        {
+            MessageBox.Show("Nessun utente da pulire nella lista 'Non ti seguono'.",
+                "Auto-Clean", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        // Check for a saved resume
+        var resume = LoadResume();
+        if (resume?.RemainingUsers.Any() == true)
+        {
+            // Keep only users still present in the current filtered list
+            var validRemaining = resume.RemainingUsers
+                .Where(u => fullList.Contains(u))
+                .ToList();
+
+            if (validRemaining.Any())
+            {
+                _autoCleanQueue      = new Queue<string>(validRemaining);
+                _autoCleanTotal      = resume.Total;
+                _autoCleanProcessed  = resume.ProcessedBefore;
+                _autoCleanUnfollowed = resume.UnfollowedBefore;
+                _autoCleanExcluded   = resume.ExcludedBefore;
+            }
+            else
+            {
+                // Resume obsolete — start fresh
+                DeleteResume();
+                _autoCleanQueue      = new Queue<string>(fullList);
+                _autoCleanTotal      = fullList.Count;
+                _autoCleanProcessed  = 0;
+                _autoCleanUnfollowed = 0;
+                _autoCleanExcluded   = 0;
+            }
+        }
+        else
+        {
+            _autoCleanQueue      = new Queue<string>(fullList);
+            _autoCleanTotal      = fullList.Count;
+            _autoCleanProcessed  = 0;
+            _autoCleanUnfollowed = 0;
+            _autoCleanExcluded   = 0;
+        }
+
+        _autoCleanCancelled = false;
+
+        AutoCleanModalOverlay.Visibility  = Visibility.Visible;
+        AutoCleanDonePanel.Visibility     = Visibility.Collapsed;
+        AutoCleanProgressPanel.Visibility = Visibility.Visible;
+
+        _floatingWindow?.Close();
+        _floatingWindow = new AutoCleanFloatingWindow();
+        _floatingWindow.CancelRequested += () => Dispatcher.Invoke(CancelAutoClean_Click, this, null!);
+        _floatingWindow.CloseRequested  += () => Dispatcher.Invoke(CloseAutoCleanModal_Click, this, null!);
+
+        ProcessNextAutoClean();
+    }
+
+    // ── Core loop ─────────────────────────────────────────────────────────────
+
+    private void ProcessNextAutoClean()
+    {
+        if (_autoCleanCancelled || _autoCleanQueue is null || _autoCleanQueue.Count == 0)
+        {
+            FinishAutoClean();
+            return;
+        }
+
+        _autoCleanCurrentUser = _autoCleanQueue.Dequeue();
+        UpdateAutoCleanProgress(_autoCleanCurrentUser, "In corso…");
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            $"https://www.instagram.com/{_autoCleanCurrentUser}/?ia_unfollow=1")
+        { UseShellExecute = true });
+    }
+
+    private void HandleUnfollowResult(string username, string status)
+    {
+        if (AutoCleanModalOverlay.Visibility != Visibility.Visible) return;
+
+        _autoCleanProcessed++;
+
+        string statusLabel = status switch
+        {
+            "unfollowed" => "Smesso di seguire",
+            "excluded"   => "Rimosso dal tracking",
+            _            => "Già rimosso"
+        };
+
+        if (status == "unfollowed") _autoCleanUnfollowed++;
+        if (status == "excluded")   _autoCleanExcluded++;
+
+        UpdateAutoCleanProgress(username, statusLabel);
+
+        if (_autoCleanCancelled || _autoCleanQueue is null || _autoCleanQueue.Count == 0)
+        {
+            FinishAutoClean();
+            return;
+        }
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+        timer.Tick += (_, _) => { timer.Stop(); ProcessNextAutoClean(); };
+        timer.Start();
+    }
+
+    private void UpdateAutoCleanProgress(string username, string statusText)
+    {
+        int    done     = _autoCleanProcessed;
+        int    total    = _autoCleanTotal;
+        double pct      = total > 0 ? (double)done / total * 100 : 0;
+        string userLabel = string.IsNullOrEmpty(username) ? "" : $"@{username}";
+
+        AutoCleanProgressBar.Value    = pct;
+        AutoCleanProgressText.Text    = $"{done} / {total}";
+        AutoCleanCurrentUserText.Text = userLabel;
+        AutoCleanStatusText.Text      = statusText;
+
+        _floatingWindow?.UpdateProgress($"{done} / {total}", pct, userLabel, statusText);
+    }
+
+    private async void FinishAutoClean()
+    {
+        if (_autoCleanCancelled)
+            SaveResume(_autoCleanQueue ?? Enumerable.Empty<string>());
+        else
+            DeleteResume();
+
+        _autoCleanQueue = null;
+
+        var summary = $"Rimossi dagli amici: {_autoCleanUnfollowed}\nRimossi dal tracking: {_autoCleanExcluded}";
+
+        // Modal
+        AutoCleanProgressPanel.Visibility = Visibility.Collapsed;
+        AutoCleanDonePanel.Visibility     = Visibility.Visible;
+        AutoCleanDoneSummaryText.Text     = summary;
+
+        // Floating window switches to done state (stays visible even when main is focused)
+        _floatingWindow?.ShowDone(summary);
+
+        if (_autoCleanUnfollowed > 0 || _autoCleanExcluded > 0)
+        {
+            var session = new InstAnalytics.Models.RemovalSession
+            {
+                Date           = DateTime.Now,
+                UnfollowedCount = _autoCleanUnfollowed,
+                ExcludedCount   = _autoCleanExcluded,
+            };
+            await _removalHistoryService.SaveSessionAsync(session);
+            await LoadHistoricalDataAsync();
+        }
+    }
+
+    private void CancelAutoClean_Click(object sender, RoutedEventArgs e)
+    {
+        _autoCleanCancelled = true;
+        // The actual save happens in FinishAutoClean once the current
+        // in-flight request completes (so counts are accurate).
+    }
+
+    private void CloseAutoCleanModal_Click(object sender, RoutedEventArgs e)
+    {
+        _floatingWindow?.Close();
+        _floatingWindow = null;
+        _autoCleanQueue = null;
+        AutoCleanModalOverlay.Visibility = Visibility.Collapsed;
+        ApplyFiltersAndRefreshLists();
     }
 
     #endregion
